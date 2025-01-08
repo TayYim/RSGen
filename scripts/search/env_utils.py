@@ -218,7 +218,6 @@ def calculate_min_thw(obs, mode="longitudinal"):
 
 
 def visualize(ttcs, vx_list, dx_list):
-    # 可视化,模拟结束后生成图表
     vx_list = np.array(vx_list)
     plt.figure()
     ax1 = plt.subplot(121)
@@ -255,7 +254,7 @@ def get_videos_of_small_ttc_cases(
         scenarioInstance.run_step(*params)
 
 
-# 使用多进程进行PSO搜索
+# Use multiprocessing to perform PSO search
 
 
 def multiprocessing_search_pso(
@@ -270,7 +269,7 @@ def multiprocessing_search_pso(
     max_cpu_n=200,
     av_model_type="AV-I",
 ):
-    print("开始进行多进程参数搜索")
+    print("Start multiprocessing parameter search")
     print("Total CPU count: ", cpu_count())
 
     n_cpus = min(cpu_count(), max_cpu_n)
@@ -302,21 +301,21 @@ def multiprocessing_search_pso(
 
                         # print("Running:{}".format(curr_name))
 
-                        sc = copy.deepcopy(scenarioInstance)  # 深拷贝已有的场景实例
+                        sc = copy.deepcopy(scenarioInstance)
                         sc.set_save_data(True)
                         sc.set_save_video(False)
                         sc.set_debug(False)
-                        sc.set_name(curr_name)  # 更新name
-                        sc.set_random_seed(seed)  # 设置随机数种子
-                        sc.set_loss_weight([w / 10, 1 - w / 10, 50])  # 设置损失函数权重
-                        sc.set_av_model(av_model)  # 设置av_model
+                        sc.set_name(curr_name)  
+                        sc.set_random_seed(seed)  
+                        sc.set_loss_weight([w / 10, 1 - w / 10, 50])  
+                        sc.set_av_model(av_model) 
                         p.apply_async(
                             sc.search_pso, args=(n_particles, max_iter, iw, c1, c2)
                         )
     p.close()
     p.join()
 
-    print("参数搜索运行结束\n")
+    print("Finish multiprocessing parameter search\n")
 
 
 # Read the results of the PSO parameter exploration experiment
@@ -510,9 +509,9 @@ def show_collision_rate(statistic_df, search_df, name, output_path, mode="normal
             collision_rate_df = collision_rate_df.round(2)
 
             # show results
-            print("不同超参下的碰撞率(次/KM)")
+            print("Collision rate group by w and seed")
             print(collision_rate_df)
-            print("保存碰撞率到{}目录下".format(output_path))
+            print("Save collision rate to {} directory".format(output_path))
             collision_rate_df.reset_index().to_csv(
                 os.path.join(output_path, "collision_rate.csv"), index=False
             )
@@ -730,11 +729,11 @@ def show_loss_evaluation(name, search_df, output_path, mode="normal"):
         # reset index
         result_df = result_df.reset_index(drop=True)
         # show results
-        print("不同超参下的loss收敛性和最小loss值")
+        print("loss evaluation of different hyperparameters")
         print(result_df)
-        print("保存loss评估表格到{}目录下".format(output_path))
+        print("Save Loss evaluation to {} directory".format(output_path))
         result_df.to_csv(os.path.join(output_path, "loss.csv"), index=False)
-        print("保存Loss图到{}目录下".format(output_path))
+        print("Save Loss curve to {} directory".format(output_path))
         # WanDBRunProvider.get_run().log({
         #     'Image/Loss curve in {}'.format(name): wandb.Image(plt)
         # })
@@ -746,11 +745,11 @@ def show_loss_evaluation(name, search_df, output_path, mode="normal"):
         result_df = result_df.reset_index(drop=True)
         # if result_df is empty, return None
         if result_df.empty:
-            print("没有找到收敛的超参组合")
+            print("Didn't find the converged hyperparameters")
             return None
         else:
             best_row = result_df.iloc[0]
-            print("最优超参组合为：\n{}".format(best_row))
+            print("Best hyperparameters:\n{}".format(best_row))
             # WanDBRunProvider.get_run().log(
             #     {"Table/Convergence and minimum loss value of different hyperparameters": wandb.Table(dataframe=result_df)}
             # )

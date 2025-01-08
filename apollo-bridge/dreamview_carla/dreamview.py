@@ -11,14 +11,14 @@ import logging
 import sys
 import os
 
-from carla_bridge.utils import transforms as trans
+from utils import transforms as trans
 
 from carla import Transform, Actor
 
 log = logging.getLogger(__name__)
 
 class Connection:
-    def __init__(self, Ego_vehilce, ip=os.environ.get("FUZZ_DREAMVIEW_HOST", "localhost"), port="8888"):
+    def __init__(self, Ego_vehilce, ip=os.environ.get("FUZZ_DREAMVIEW_HOST", "localhost"), port="8888", log=None):
         """
         simulator: is an lgsvl.Simulator object
         ego_agent: an lgsvl.EgoVehicle object, this is intended to be used with a vehicle equipped with Apollo 5.0
@@ -28,6 +28,7 @@ class Connection:
         self.url = "ws://" + ip + ":" + port + "/websocket"
         self.ego:Actor = Ego_vehilce
         self.ws = create_connection(self.url)
+        self.log = log
 
     # def set_ego(self, ego_agent):
     #     self.ego = ego_agent
@@ -39,7 +40,7 @@ class Connection:
         print(f'dest:{dest.position}')
         dest_x = dest.position.x
         dest_y = dest.position.y
-        self.ws.send(
+        res = self.ws.send(
             json.dumps(
                 {
                     "type": "SendRoutingRequest",
@@ -54,8 +55,6 @@ class Connection:
                 }
             )
         )
-        # response = self.ws.recv()
-        # print(f"Server Response: {response}")
         return
 
     def enable_module(self, module):

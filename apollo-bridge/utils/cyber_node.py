@@ -86,7 +86,7 @@ class CyberNode(object):
         launch_cmd = f"cyber_launch stop /apollo/modules/control/launch/control.launch"
         os.system(launch_cmd)
         time.sleep(1)
-        # 上面命令有时候无法让 control.dag 进程退出，所以用下面命令再强制 kill
+        # When the above command sometimes cannot make the control.dag process exit, use the following
         get_control_pid_cmd = "ps aux | grep control.dag | grep -v grep | cut -c 10-16"
         pid = subprocess.getoutput(get_control_pid_cmd).strip()
         if pid != "":

@@ -1,5 +1,9 @@
 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 loguru==0.7.0
+redis==4.3.4
+python-etcd==0.4.5
 networkx
 transforms3d==0.4.1
+opencv-python==4.6.0.66
+websocket-client

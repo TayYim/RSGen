@@ -18,17 +18,17 @@ from modules.common_msgs.transform_msgs.transform_pb2 import TransformStamped, T
 
 
 from utils import transforms as trans
-from utils.global_args import GlobalArgs
 
 
 class EgoVehicle:
     def __init__(self, ego_vehicle, node):
         self.node = node
-        self.log = GlobalArgs.log
         self.ego_vehicle = ego_vehicle
 
         self.left_turn_ratio = 1  # Left turn amplitude correction
         self.right_turn_ratio = 1  # Right turn amplitude correction
+        # self.left_turn_ratio = 0.7  # Left turn amplitude correction
+        # self.right_turn_ratio = 0.85  # Right turn amplitude correction
         self.restart_control_flag = False
         self.linear_velocity = Point3D()
 
@@ -53,7 +53,7 @@ class EgoVehicle:
         tf_msg = TransformStamped()
         tf_msg.header.timestamp_sec = self.node.get_time()
         tf_msg.header.frame_id = "world"
-        tf_msg.header.module_name = "oasis_bridge"
+        tf_msg.header.module_name = "rsgen_bridge"
         tf_msg.child_frame_id = "localization"
 
         tf_msg.transform.translation.x = pose.position.x
@@ -210,25 +210,38 @@ class EgoVehicle:
 
         status = cyber_vehicle_control.header.status
         '''
-        正常输出
+        Normal
         status:
             error_code: OK
             
-        异常输出情况 1：
+        Error 1:
         status:
             error_code: OK
             msg: "estop for empty planning trajectory, 
                 planning headers: timestamp_sec: 1700027960.1997719 module_name: "planning" sequence_num: 0"
         
-        异常输出情况 2：
+        Error 2:
         status:
             error_code: OK
             msg: msg: "planning has no trajectory point. planning_seq_num:0"
         '''
-        # 如果 control 模块输出异常情况 1，则重启 control 且只重启一次
-        if "estop" in str(status) and not self.restart_control_flag:
-            self.node.restart_apollo_control(self.log)
-            self.restart_control_flag = True
+        # If the control module outputs an abnormal situation 1, restart the control and restart only once
+        # if "estop" in str(status) and not self.restart_control_flag:
+        #     self.node.log.warning(f"Fail at control. Need to restart")
+        #     self.node.restart_apollo_control(self.node.log)
+        #     self.restart_control_flag = True
+
+        if not self.node.control_start_flag:
+            self.node.control_start_flag = True
+            # self.node.world.wait_for_tick()
+        # else:
+        #     self.node.world.tick()
+        # self.node.log.info(f"vehicle_control: throttle-{vehicle_control.throttle}, brake-{vehicle_control.brake}")
+        self.ego_vehicle.apply_control(vehicle_control)
+        self.node.control_queue.append(vehicle_control)
+
+    
+    def apply_control(self, vehicle_control):
         self.ego_vehicle.apply_control(vehicle_control)
 
     @staticmethod

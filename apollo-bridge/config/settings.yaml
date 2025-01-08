@@ -1,17 +1,6 @@
-oasis:
-  host: '172.16.19.217'
-  carla_port: 2000
-  carla_timeout: 30
-  # redis_port: 6379
-  # redis_db: 1
-  # redis_password: "123456"
-  # etcd_port: 2379
-  # drive_mode: "Apollo"
-  # drive_version: "1.0"
-  # module: "ads"
-
 carla:
-  host: '192.168.1.208'
+  host: '127.0.0.1'
+  # host: '192.168.1.156'
   port: 2000
   timeout: 30
   passive: False
@@ -23,8 +12,8 @@ carla:
   ego_vehicle:
     role_name: ["hero", "ego_vehicle"]
 
-  # 是否测试感知模块，默认开启 true，关闭 false
-  perception_switch: false
+  # Whether to test the perception module, default open true, close false
+  perception_switch: False
   ego_sensors:
     gnss:
       role_name: "gnss-osg"
@@ -32,7 +21,7 @@ carla:
       role_name: "imu-osg"
     lidar:
       role_name: "ray_cast-osg"
-    # front_6mm_camera 放置到车头位置，否则影响感知
+    # front_6mm_camera: put in the front of the car, otherwise it will affect the perception
     front_6mm_camera:
       role_name: "rgb-6-osg"
     # front_12mm_camera:

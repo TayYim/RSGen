@@ -45,7 +45,7 @@ class Routing(object):
         In a lane, the s coordinate of the starting position is 0, and the s coordinate of the ending position is the
         length of the lane.
 
-        Oasis (carla) map: In Oasis, the starting point of the lane is independent of the direction of the lane.
+        Carla map: The starting point of the lane is independent of the direction of the lane.
         All lanes on the same road start on the same side, and equals to the road start position.
 
         Apollo map (converted by road_runner): In Apollo, the starting point of a lane is related to the direction of
@@ -57,7 +57,7 @@ class Routing(object):
         if not routing_request:
             routing_request = routing_pb2.RoutingRequest()
         routing_request.header.timestamp_sec = now_cyber_time
-        routing_request.header.module_name = "oasis_bridge"
+        routing_request.header.module_name = "rsgen_bridge"
 
         self._set_imap_waypoint(start_location, target_location, routing_request)
         # self._set_old_map_waypoint(start_location, target_location, routing_request)
@@ -109,7 +109,7 @@ class Routing(object):
         now_cyber_time = cyber_time.Time.now().to_sec()
 
         routing_response.header.timestamp_sec = now_cyber_time
-        routing_response.header.module_name = "oasis_bridge"
+        routing_response.header.module_name = "rsgen_bridge"
         return routing_response
 
     def _set_road_runner_waypoint(

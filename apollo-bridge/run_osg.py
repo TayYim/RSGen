@@ -4,8 +4,10 @@ import os
 import time
 import json
 import carla
+import sys
 
 import subprocess
+import psutil
 
 from sensor.imu import IMU
 from sensor.gnss import GNSS
@@ -25,20 +27,39 @@ from cyber.proto.clock_pb2 import Clock
 from modules.common_msgs.routing_msgs import routing_pb2
 import yaml
 import signal
+from dreamview_carla.dreamview import Connection
+import time
+import argparse
 
 
 class OSGBridge(CyberNode):
 
-    def __init__(self, params, carla_world):
+    def __init__(self, params, args, carla_world, log):
         super().__init__("OSG_Carla_Cyber_Bridge")
 
         self.params = params
+        self.log = log
+        self.args = args
 
         # Get map name and destination position
-        self.map_name = params["town"]
+        if args.map:
+            self.map_name = args.map
+        else:
+            self.map_name = params["town"]
 
-        #TODO
-        self.dst_position = {"x": 396.30, "y": 100, "z": 0.0}
+        if args.dest_x:
+            self.dest_trans = carla.Transform(carla.Location(x=args.dest_x, y=args.dest_y, z=args.dest_z), carla.Rotation(yaw=args.dest_yaw, pitch=0, roll=0))
+        else:
+            # self.dest_trans = carla.Transform(carla.Location(x=396.3, y=90, z=0), carla.Rotation(yaw=-90, pitch=0, roll=0))
+            # self.dest_trans = carla.Transform(carla.Location(x=315.3, y=199.16, z=0), carla.Rotation(yaw=0, pitch=0, roll=0))
+            
+            # Town04
+            # original
+            # self.dest_trans = carla.Transform(carla.Location(x=-9.15, y=-9, z=0), carla.Rotation(yaw=90, pitch=0, roll=0))
+            # On bridge
+            # self.dest_trans = carla.Transform(carla.Location(x=30, y=13.23, z=12), carla.Rotation(yaw=-180, pitch=0, roll=0))
+            self.dest_trans = carla.Transform(carla.Location(x=-215.35, y=12.66, z=4.3), carla.Rotation(yaw=-180, pitch=0, roll=0))
+
 
         self.map_util = None
         self.ego_vehicle = None
@@ -51,60 +72,39 @@ class OSGBridge(CyberNode):
 
         self.world = carla_world
 
+        self.dreamview_connection = None
+
+        self.control_start_flag = False
+
+        self.control_queue = [] # To store control command
+
 
     def run_apollo(self):
-        # Every time you run a task, start the control module, and close the control module after running
-        self.start_apollo_control(self.log)
-
-        self._set_map(f"carla_{self.map_name.lower()}")
-
         # Wait for Carla until the ego vehicle spawned
-        self._find_ego_vehicle()
+        self._find_ego_vehicle() # TODO: role name should come from params
+        self.log.info("Ego found")
 
-        # Send routing response to run the task
-        self._set_destination(self.dst_position, use_carla_routing=False)
+        self.world.tick()
+
+        # connect to dreamview
+        self.dreamview_connection = Connection(self.ego_vehicle, port="8899", log=self.log)
+
+        # set map
+        self.dreamview_connection.set_hd_map(f"carla_{self.map_name.lower()}")
+    
+
+        # Set dest
+        modules = ['Prediction', 'Control', 'Planning']
+        # self.dreamview_connection.set_destination_tranform(self.dest_trans)
+        self.dreamview_connection.enable_apollo(self.dest_trans, modules)
+
 
         # self._set_sensors()
         self._set_signal_lights()
+        self.log.info("Signal set")
 
+        self.log.info("Start to update actor factor")
         self._update_actor_factor()
-
-    def _set_map(self, map_name):
-        """Set map in apollo"""
-        self.map_util = MapUtil(map_name)
-        file_name = "/apollo/modules/common/data/global_flagfile.txt"
-        new_line = f"--map_dir=/apollo/modules/map/data/{map_name}"
-        with open(file_name, "r", encoding="utf-8") as file:
-            lines = file.readlines()
-
-        lines[-1] = new_line + "\n"
-
-        with open(file_name, "w", encoding="utf-8") as file:
-            file.writelines(lines)
-
-    def _set_destination(self, dst_position, use_carla_routing=False):
-        """
-        Set destination and send routing request or response.
-        If you use_carla_routing is True, GlobalRoutePlanner will be used to plan the global route
-        and send RoutingResponse to Apollo.
-        Else RoutingRequest will be sent to Apollo.
-        Args:
-            dst_position: The destination point extract from task_info
-            use_carla_routing: Whether to use carla routing function. (GlobalRoutePlanner)
-        """
-        routing = Routing(self.world.get_map(), self.map_util)
-        start_location = self.ego_vehicle.get_location()
-        target_location = carla.Location(
-            float(dst_position["x"]),
-            float(dst_position["y"]) * -1,
-            float(dst_position["z"]),
-        )
-        if use_carla_routing:
-            routing_response = routing.generate_routing_response(start_location, target_location)
-            self.routing_res.write(routing_response)
-        else:
-            routing_request = routing.generate_routing_request(start_location, target_location)
-            self.routing_req.write(routing_request)
 
     def _find_ego_vehicle(self, timeout=60):
         """
@@ -114,7 +114,7 @@ class OSGBridge(CyberNode):
         while self.ego_vehicle is None and time.time() - start_time < timeout:
             actor_list = self.world.get_actors()
             for actor in actor_list:
-                if actor.attributes.get("role_name") == "ego_vehicle":
+                if actor.attributes.get("role_name") in self.params.get('ego_vehicle').get('role_name'):
                     self.ego_vehicle = actor
                     break
 
@@ -167,17 +167,6 @@ class OSGBridge(CyberNode):
                 self.log.warning("not found front_6mm_camera sensor")
             time.sleep(0.1)
 
-    def _find_front_12mm_camera(self):
-        while True:
-            actors = self.world.get_actors().filter("sensor.camera.rgb")
-            gnss_role_name = self.params.get("ego_sensors").get("front_12mm_camera").get("role_name")
-            for actor in actors:
-                if gnss_role_name == actor.attributes.get('role_name'):
-                    self.log.info("front_12mm_camera sensor found")
-                    return actor
-                self.log.warning("not found front_12mm_camera sensor")
-            time.sleep(0.1)
-
     def _set_signal_lights(self):
         if not self.signal_lights_on:
             # turn off all signals
@@ -187,7 +176,7 @@ class OSGBridge(CyberNode):
                 traffic_light.freeze(True)
 
     def _update_actor_factor(self):
-        # Find the Carla object first
+        # First find the Carla object
         gnss_actor = self._find_gnss_actor()
         imu_actor = self._find_imu_actor()
         lidar_actor = self._find_lidar_actor()
@@ -200,33 +189,81 @@ class OSGBridge(CyberNode):
         Camera(front_6mm_actor, "front_6mm", self)
         ego_vehicle_obj = EgoVehicle(self.ego_vehicle, self)
 
-        # When the radar perception is started, the empty data needs to be written to the /apollo/perception/obstacles channel for the first time, otherwise the planning module will report an error
+        # When starting the radar perception, you need to write empty data to the /apollo/perception/obstacles channel for the first time, otherwise the planning module will report an error
         obstacle_obj = Obstacle("obstacle", self.world, self)
-        obstacle_obj.update_null_obstacle()
+        # obstacle_obj.update_null_obstacle()
 
         perception_switch = self.params.get("perception_switch")
+        self.log.info(f"Perception Switch: {perception_switch}")
 
         def on_exit(sig, frame):
-            self.stop_apollo_control(self.log)
+            # self.stop_apollo_control(self.log)
+            self.log.info("Exit!")
+            self.dreamview_connection.disable_module("Control")
+            self.dreamview_connection.disable_module("Prediction")
+            self.dreamview_connection.disable_module("Planning")
+            self.dreamview_connection.disconnect()
+            sys.exit(0)
 
         signal.signal(signal.SIGINT, on_exit)
         signal.signal(signal.SIGTERM, on_exit)
 
-        while True:
-            frame = self.world.SendTickMsg()
-            self.clock_writer.write(Clock(clock=int(self.get_time())))
+        self.world.tick()
+
+        while self.ego_vehicle.is_alive:
+
+            frame = self.world.tick()
+
+            world_snapshot = self.world.get_snapshot()
+            self.timestamp = self.get_timestamp(
+                world_snapshot.timestamp.elapsed_seconds, from_sec=True
+            )
+            self.clock_writer.write(
+                Clock(clock=int(self.timestamp["secs"]))
+            )
+
+
+            # update control command
+            # if len(self.control_queue)==0:
+            #     pass
+            # else:
+            #     curr_control = self.control_queue[0]
+            #     self.control_queue.clear()
+            #     ego_vehicle_obj.apply_control(curr_control)
+
 
             ego_vehicle_obj.update()
 
             # If the perception switch is turned off, that is, only the rule control is tested, the real obstacles need to be updated to /apollo/perception/obstacles
             if perception_switch is False:
                 obstacle_obj.update_truth_obstacle()
+            
+def is_process_running(process_name):
+    """
+    Check if the process with the specified name is running
+    """
+    # Enumerate all running processes
+    for proc in psutil.process_iter(attrs=['name']):
+        try:
+            # Find the process name that matches the specified name
+            if process_name.lower() in proc.info['name'].lower():
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return False
+
+def start_dreamview():
+    """
+    Start Dreamview by executing the script
+    """
+    # First clear all mainboard processes
+    subprocess.run(['pkill', '-9', 'mainboard'])
+    # Run the bootstrap script to start Dreamview
+    subprocess.run(['/apollo/scripts/bootstrap.sh', 'restart'], shell=True)
 
 
 
-
-
-def main():
+def main(args):
     """
     main function for carla simulator Cyber bridge
     maintaining the communication client and the CarlaBridge object
@@ -246,17 +283,27 @@ def main():
     
 
     try:
+        # Connect to Carla
         carla_client = carla.Client(
             host=params["host"], port=params["port"]
         )
         carla_client.set_timeout(params["timeout"])
 
-        carla_client.load_world(params["town"])
         carla_world = carla_client.get_world()
 
         log.info(f"Connect to {params['host']}:{params['port']} successfully.")
 
-        carla_bridge = OSGBridge(params, carla_world)
+        carla_world.tick()
+
+        # Check dreamview status
+        # If dreamview is not running, start it
+        if not is_process_running('dreamview'):
+            log.info("Dreamview not started. Starting Dreamview...")
+            start_dreamview()
+        else:
+            log.info("Dreamview is already running.")
+
+        carla_bridge = OSGBridge(params, args, carla_world, log)
 
         carla_bridge.run_apollo()
 
@@ -267,17 +314,29 @@ def main():
     except Exception as e:  # pylint: disable=W0718
         log.error(e)
     finally:
-        carla_world = carla_client.get_world()
-        settings = carla_world.get_settings()
-        settings.synchronous_mode = False
-        settings.fixed_delta_seconds = None
-        carla_world.apply_settings(settings)
+        # carla_world = carla_client.get_world()
+        # settings = carla_world.get_settings()
+        # settings.synchronous_mode = False
+        # settings.fixed_delta_seconds = None
+        # carla_world.apply_settings(settings)
         log.warning("Shutting down.")
-        carla_bridge.destroy()
+        # carla_bridge.destroy()
         del carla_world
         del carla_client
 
 
 if __name__ == "__main__":
-    main()
+    # Create a parser
+    parser = argparse.ArgumentParser(description="Run OSG bridge.")
+    
+    parser.add_argument('-m', '--map', type=str, help='Town name')
+    
+    parser.add_argument('-x', '--dest_x', type=float, help='x')
+    parser.add_argument('-y', '--dest_y', type=float, help='y')
+    parser.add_argument('-z', '--dest_z', type=float, help='z')
+    parser.add_argument('-yaw', '--dest_yaw', type=float, help='yaw')
+    
+    args = parser.parse_args()
+    
+    main(args)
 

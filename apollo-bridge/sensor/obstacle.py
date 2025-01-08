@@ -39,13 +39,13 @@ class Obstacle:
         cyber_objects = PerceptionObstacles()
         cyber_objects.header.CopyFrom(self.get_msg_header(frame_id="obstacle"))
 
-        # 暂时只统计车辆障碍物
+        # Temporary only count vehicle obstacles
         actors = [actor for actor in self.world.get_actors() if actor.type_id.startswith("vehicle")]
         for actor in actors:
             if actor.attributes.get("role_name") in self.params.get('ego_vehicle').get('role_name'):
                 # self.log.debug(f"ego vehicle is: {actor}")
                 continue
-            if actor.get_location().z < -100: # Ignore vehicles underground
+            if actor.get_location().z < -60: # Ignore vehicles underground
                 continue
             # self.log.info(f"actor is {actor}, id: {actor.id}, attributes: {actor.attributes}, type_id: {actor.type_id}")
 
@@ -102,7 +102,7 @@ class Obstacle:
         obj.width = actor.bounding_box.extent.y * 2.0
         obj.height = actor.bounding_box.extent.z * 2.0
 
-        # Oasis / Carla 的自行车/摩托车的三维为 0 问题的临时解决方案
+        # Temporary solution for the 0 problem of the three-dimensional of bicycles/motorcycles
         if obj.length == 0 and obj.width == 0 and obj.height == 0 and classification == 4:
             obj.length += 1.8
             obj.width += 0.6
