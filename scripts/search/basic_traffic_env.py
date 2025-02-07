@@ -532,22 +532,23 @@ class BasicTrafficEnv:
         else:
             collision_loss = 0
 
-        if self.search_method == "bys":
-            loss = (
-                -1 * min_ttc + collision_loss * self.loss_weight[2]
-            ) * self.loss_weight[0] + similarity * self.loss_weight[1]
-        else:
-            loss = (min_ttc - collision_loss * self.loss_weight[2]) * self.loss_weight[
-                0
-            ] - similarity * self.loss_weight[1]
+        # Old, for demo
+        # if self.search_method == "bys":
+        #     loss = (
+        #         -1 * min_ttc + collision_loss * self.loss_weight[2]
+        #     ) * self.loss_weight[0] + similarity * self.loss_weight[1]
+        # else:
+        #     loss = (min_ttc - collision_loss * self.loss_weight[2]) * self.loss_weight[
+        #         0
+        #     ] - similarity * self.loss_weight[1]
 
-        # new loss, less better
-        # w = self.loss_weight[0]
-        # A = min_ttc - collision_loss * 50
-        # A = (A - -50) / (10 - -50)  # normalize 
-        # N = (similarity - -100) / (0 - -100)  # normalize 
-        # N = 1 - N
-        # loss = (A ** (w**2) + N ** ((1 - w) ** 2)) ** math.exp(w * (1 - w))
+        #less better
+        w = self.loss_weight[0]
+        A = min_ttc - collision_loss * 50
+        A = (A - -50) / (10 - -50)  # normalize 
+        N = (similarity - -100) / (0 - -100)  # normalize 
+        N = 1 - N
+        loss = (A ** (w**2) + N ** ((1 - w) ** 2)) ** math.exp(w * (1 - w))
 
         # Collect search data
         self.search_collector["ttc"].append(min_ttc)
