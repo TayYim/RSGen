@@ -132,6 +132,22 @@ sudo apt install python3-pip -y
 
 Also modify planning_gflags.cc, planning.conf and traffic_rule_config.pb.txt as we do in 9.0.
 
+Modify modules/apollo-bridge/run_osg.py 
+
+Change port to 8888
+
+Also modify the Set dest part:
+```
+        # Set dest
+        modules = ['Prediction', 'Planning', 'Routing']
+        for m in modules:
+            self.dreamview_connection.enable_module(m)
+
+        time.sleep(3)
+        self.dreamview_connection.set_destination_tranform(self.dest_trans)
+        self.dreamview_connection.enable_module('Control')
+```
+
 ### Apollo 7.0
 
 ```sh
